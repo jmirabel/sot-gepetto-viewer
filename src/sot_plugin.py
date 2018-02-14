@@ -156,7 +156,10 @@ class Graph:
     def _nodeContextMenu (self, node):
         e = node.getAttribute("label")
         if self.nodes.has_key(e):
-            print e
+            menu = QtGui.QMenu("Entity " + e, self.view)
+            a = menu.addAction("Show graph backward")
+            a.connect(Qt.SIGNAL("triggered()"), lambda: self.createGraphBackwardFromEntity(e))
+            menu.popup(QtGui.QCursor.pos())
 
 class Plugin(QtGui.QDockWidget):
     def __init__(self, main):
