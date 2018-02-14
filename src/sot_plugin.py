@@ -168,4 +168,50 @@ class Plugin(QtGui.QDockWidget):
         self.main = main
         self.graph = Graph (self)
 
-        self.setWidget (self.graph.view)
+        cw = QtGui.QWidget (self)
+        layout = QtGui.QVBoxLayout (cw)
+        layout.addWidget (self.graph.view)
+        # cw.setLayout(layout)
+        self.setWidget (cw)
+
+        toolBar = QtGui.QToolBar ("SoT buttons")
+        toolBar.addAction(QtGui.QIcon.fromTheme("view-refresh"), "Create entire graph", self.graph.createAllGraph)
+        toolBar.addAction(QtGui.QIcon.fromTheme("window-new"), "Create viewer", self.createRobotView)
+        main.addToolBar (toolBar)
+
+    def createRobotView (self):
+        from pinocchio import RobotWrapper, se3
+        import os
+        file = str(QtGui.QFileDialog.getOpenFileName(self, "Robot description file"))
+        print "Using", file
+        self.robot = RobotWrapper (
+                filename = file,
+                package_dirs = os.getenv("ROS_PACKAGE_PATH", None),
+                root_joint = se3.JointModelFreeFlyer())
+        self.robot.initDisplay()
+        # FIXME Hack because for some reason, creating the first OSGWidget with
+        # CORBA creates a SEGV...
+        # The second OSGWidget does not cause a crash and the first through
+        # self.main.createView does not neither.
+        self.robot.viewer.gui.createWindow = self._createView
+        self.robot.loadDisplayModel("world/pinocchio")
+        cmd = self.graph.cmd
+        q = cmd.run("robot.dynamic.position.value")
+        q = self._sotToPin (q)
+        self.robot.display(q)
+
+    def _sotToPin(self, q):
+        # Handle the very annoying problem of RPY->quaternion
+        # with the good convention...
+        from dynamic_graph.sot.tools.quaternion import Quaternion
+        import numpy as np
+        quat = Quaternion()
+        quat = tuple(quat.fromRPY(q[3], q[4], q[5]).array.tolist())
+        return np.matrix(q[0:3] + quat[1:] + (quat[0],) + q[6:])
+
+    def _createView (self, name):
+        osg = self.main.createView (name)
+        return osg.wid()
+
+    def refreshInterface(self):
+        self.graph.createAllGraph()
