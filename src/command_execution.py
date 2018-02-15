@@ -50,6 +50,10 @@ class CommandExecution(object):
             'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
         self._locals  = {}
         self._globals = {}
+        self._init()
+
+    def _init(self):
+        self.run ("import dynamic_graph as dg", False)
 
     # @staticmethod
     # def localsGetter(g):
@@ -113,7 +117,8 @@ class CommandExecution(object):
             self._client = rospy.ServiceProxy(
                 'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
             if retry:
-                self.runRemoteCode(code, False)
+                self.runRemoteCode ("import dynamic_graph as dg", False, False)
+                return self.runRemoteCode(code, retValue, False)
             else:
                 print("Failed to connect. Is Stack of Tasks running?")
                 raise IOError("Failed to connect. Is Stack of Tasks running?")

@@ -2,14 +2,54 @@ from PythonQt import QGraphViz, QtGui, Qt
 from command_execution import CommandExecution
 import rospy
 
+hookRegistration = """\
+class CallbackRobotAfterIncrement(object):
+  def __init__(self):
+    self.hook = dg.signal_base.SignalWrapper ("hook_after_increment", "bool", self.callback)
+    self.bMaxLen = 1000
+    self.signals = []
+    self.buffers = []
+  def register(self,robot):
+    robot.device.after.addSignal("python_signals.hook_after_increment")
+  def callback(self, time):
+    # print("Called at time " + str(time))
+    for s,b in zip(self.signals, self.buffers):
+      if s.time == time:
+        b.append(s.value)
+      else:
+        b.append(None)
+  def watchSignal(self,entity,signal):
+    from collections import deque
+    e = dg.entity.Entity.entities[entity]
+    s = e.signal(signal)
+    self.signals.append(s)
+    self.buffers.append(deque (maxlen=self.bMaxLen))
+  def unwatchSignal(self,entity,signal):
+    e = dg.entity.Entity.entities[entity]
+    s = e.signal(signal)
+    idx = self.signals.index(s)
+    self.signals.pop(idx)
+    self.buffers.pop(idx)
+  def fetch(self):
+    ret = []
+    if len(self.buffers) == 0: return ret
+    c = len(self.buffers[-1])
+    for b in self.buffers: ret.append([None,] * c)
+    for i in range(c):
+        for j,b in enumerate(self.buffers):
+            ret[j][i] = b.popleft()
+    return ret
+"""
+
 class Graph:
     def __init__(self, plugin):
         self.plugin = plugin
         self.graph = QGraphViz.QGVScene("graph")
         self.view = QtGui.QGraphicsView (self.graph)
         self.layoutShouldBeFreed = False
-        self.graph.connect("nodeMouseRelease(QGVNode*)", self.updateLayout)
-        self.graph.connect("nodeContextMenu(QGVNode*)", self._nodeContextMenu)
+        self.graph.connect(Qt.SIGNAL("nodeMouseRelease(QGVNode*)"), self.updateLayout)
+        self.graph.connect(Qt.SIGNAL("nodeContextMenu(QGVNode*)" ), self._nodeContextMenu)
+        self.graph.connect(Qt.SIGNAL("edgeContextMenu(QGVEdge*)" ), self._signalContextMenu)
 
         self.typeCallbacks = {
                 "Task": ( self._nodeEntityTask, self._edgeEntityTask ),
@@ -26,6 +66,7 @@ class Graph:
         self.nodes = {}
         self.types = {}
         self.edges = {}
+        self.edgesBack = {}
         self.subgraphs = {}
         self.graph.clear()
 
@@ -48,7 +89,6 @@ class Graph:
 
     def initCmd (self):
         self.cmd = CommandExecution()
-        self.cmd.run ("import dynamic_graph as dg", False)
 
     def createAllGraph (self):
         entities = self.cmd.run ("dg.entity.Entity.entities.keys()")
@@ -139,7 +179,9 @@ class Graph:
         signals = self.cmd.run("[ s.name for s in dg.entity.Entity.entities['"+e+"'].signals() ]")
         for s in signals:
             ss = s.split("::")
-            if ss[1].startswith("in"):
+            if len(ss) != 3:
+                print "Cannot handle", s
+            elif ss[1].startswith("in"):
                 plugged = self.cmd.run("dg.entity.Entity.entities['"+e+"'].signal('"+ss[-1]+"').isPlugged()")
                 other_s = self.cmd.run("dg.entity.Entity.entities['"+e+"'].signal('"+ss[-1]+"').getPlugged().name if dg.entity.Entity.entities['"+e+"'].signal('"+ss[-1]+"').isPlugged() else None")
                 if other_s is not None and s != other_s:
@@ -147,7 +189,9 @@ class Graph:
                     other_e = other_s[idx:other_s.index(')',idx)]
                     if not self.nodes.has_key(other_e):
                         self._createGraphBackwardFromEntity(other_e)
-                    self.edges[s] = self.graph.addEdge (self.nodes[other_e], self.nodes[e], ss[2])
+                    self.edges[s] = (other_e, e,
+                            self.graph.addEdge (self.nodes[other_e], self.nodes[e], ss[2]))
+                    self.edgesBack[self.edges[s][2]] = s
             elif ss[1].startswith("out"):
                 pass
             else:
@@ -159,6 +203,15 @@ class Graph:
             menu = QtGui.QMenu("Entity " + e, self.view)
             a = menu.addAction("Show graph backward")
             a.connect(Qt.SIGNAL("triggered()"), lambda: self.createGraphBackwardFromEntity(e))
+            menu.popup(QtGui.QCursor.pos())
+
+    def _signalContextMenu (self, edge):
+        s = edge.getAttribute("xlabel")
+        if self.edgesBack.has_key(edge):
+            e = self.edges[self.edgesBack[edge]][1]
+            menu = QtGui.QMenu("Signal " + e, self.view)
+            a = menu.addAction("Watch value")
+            a.connect(Qt.SIGNAL("triggered()"), lambda: self.plugin.toggleDisplaySignalValue(e, s))
             menu.popup(QtGui.QCursor.pos())
 
 class Plugin(QtGui.QDockWidget):
@@ -179,15 +232,21 @@ class Plugin(QtGui.QDockWidget):
         toolBar.addAction(QtGui.QIcon.fromTheme("window-new"), "Create viewer", self.createRobotView)
         main.addToolBar (toolBar)
 
+        self.displaySignals = []
+        self.timerDisplaySignalValues = None
+
     def createRobotView (self):
         from pinocchio import RobotWrapper, se3
         import os
-        file = str(QtGui.QFileDialog.getOpenFileName(self, "Robot description file"))
-        print "Using", file
+        # file = str(QtGui.QFileDialog.getOpenFileName(self, "Robot description file"))
+        # print file
+        file = "/local/jmirabel/devel/openrobots/install/share/talos_data/robots/talos_reduced.urdf"
         self.robot = RobotWrapper (
                 filename = file,
                 package_dirs = os.getenv("ROS_PACKAGE_PATH", None),
+                # package_dirs = [ "/local/jmirabel/devel/openrobots/install/share", ],
                 root_joint = se3.JointModelFreeFlyer())
+        # self.robot.initDisplay(loadModel=True)
         self.robot.initDisplay()
         # FIXME Hack because for some reason, creating the first OSGWidget with
         # CORBA creates a SEGV...
@@ -199,6 +258,26 @@ class Plugin(QtGui.QDockWidget):
         q = cmd.run("robot.dynamic.position.value")
         q = self._sotToPin (q)
         self.robot.display(q)
+
+    def toggleDisplaySignalValue (self, entity, signal):
+        k = (entity, signal)
+        try:
+            idx = self.displaySignals.index(k)
+            self.displaySignals.pop(idx)
+            self._dehookSignal(entity, signal)
+            if len(self.displaySignals) == 0:
+                self.timerDisplaySignalValues.stop()
+        except ValueError:
+            if self.timerDisplaySignalValues is None:
+                self._registerHook()
+                self.timerDisplaySignalValues = Qt.QTimer(self)
+                self.timerDisplaySignalValues.setInterval(50)
+                self.timerDisplaySignalValues.connect(Qt.SIGNAL("timeout()"), self._fetchNewSignalValues)
+            self._hookSignal(entity, signal)
+            self.displaySignals.append(k)
+            self.timerDisplaySignalValues.setSingleShot(False)
+            self.timerDisplaySignalValues.start()
+
 
     def _sotToPin(self, q):
         # Handle the very annoying problem of RPY->quaternion
@@ -212,6 +291,20 @@ class Plugin(QtGui.QDockWidget):
     def _createView (self, name):
         osg = self.main.createView (name)
         return osg.wid()
+
+    def _registerHook (self):
+        self.graph.cmd.run (hookRegistration,False)
+        self.graph.cmd.run ("hook = CallbackRobotAfterIncrement()", False)
+        self.graph.cmd.run ("hook.register(robot)", False)
+
+    def _hookSignal(self, entity, signal):
+        self.graph.cmd.run ("hook.watchSignal('"+entity+"', '"+signal+"')", False)
+    def _dehookSignal(self, entity, signal):
+        self.graph.cmd.run ("hook.unwatchSignal('"+entity+"', '"+signal+")", False)
+
+    def _fetchNewSignalValues(self):
+        values = self.graph.cmd.run ("hook.fetch()")
+        print values
 
     def refreshInterface(self):
         self.graph.createAllGraph()
