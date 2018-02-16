@@ -36,13 +36,7 @@ import rospy
 import dynamic_graph_bridge.srv
 import dynamic_graph_bridge_msgs.srv
 
-# rospy.init_node ("sot_gepetto_viewer_plugin", anonymous=True)
-
 class CommandExecution(object):
-    # _localsGetter  = None
-    # _globalsGetter = None
-    # _locals  = None
-    # _globals = None
     _local = False
 
     def __init__(self):
@@ -55,38 +49,17 @@ class CommandExecution(object):
     def _init(self):
         self.run ("import dynamic_graph as dg", False)
 
-    # @staticmethod
-    # def localsGetter(g):
-      # CommandExecution._localsGetter = g
-    # @staticmethod
-    # def globalsGetter(g):
-      # CommandExecution._globalsGetter = g
-
-    # @staticmethod
-    # def locals(l):
-      # CommandExecution._locals = l
-    # @staticmethod
-    # def globals(g):
-      # CommandExecution._globals = g
     @staticmethod
     def dgIsLocal():
       CommandExecution._local = True
 
     def run(self, code, retValue = True):
-        # if CommandExecution._localsGetter is not None:
-        # if CommandExecution._locals is not None:
         if CommandExecution._local:
           return self.runLocalCode (code, retValue)
         else:
           return self.runRemoteCode (code, retValue, True)
 
     def runLocalCode(self, code, retValue):
-        # print ("Local")
-        # l = CommandExecution._localsGetter()
-        # g = CommandExecution._globalsGetter() if CommandExecution._globalsGetter is not None else {}
-        # l = CommandExecution._locals
-        # g = CommandExecution._globals
-        # l = self._locals
         l = None
         g = self._globals
         if retValue:
