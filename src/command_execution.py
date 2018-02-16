@@ -86,7 +86,8 @@ class CommandExecution(object):
         # g = CommandExecution._globalsGetter() if CommandExecution._globalsGetter is not None else {}
         # l = CommandExecution._locals
         # g = CommandExecution._globals
-        l = self._locals
+        # l = self._locals
+        l = None
         g = self._globals
         if retValue:
           exec("_returnValue = " + code, g, l)
