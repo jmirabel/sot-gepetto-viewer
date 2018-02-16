@@ -9,8 +9,14 @@ class CallbackRobotAfterIncrement(object):
     self.bMaxLen = 1000
     self.signals = []
     self.buffers = []
-  def register(self,robot):
-    robot.device.after.addSignal("python_signals.hook_after_increment")
+    self.robotSimu = None
+    for e in dg.entity.Entity.entities.values():
+      if e.className == "RobotSimu":
+        self.robotSimu = e
+        break
+  def register(self):
+    self.robotSimu.after.rmSignal("python_signals.hook_after_increment")
+    self.robotSimu.after.addSignal("python_signals.hook_after_increment")
   def callback(self, time):
     # print("Called at time " + str(time))
     for s,b in zip(self.signals, self.buffers):
@@ -210,7 +216,7 @@ class Graph:
         if self.edgesBack.has_key(edge):
             e = self.edges[self.edgesBack[edge]][1]
             menu = QtGui.QMenu("Signal " + e, self.view)
-            a = menu.addAction("Watch value")
+            a = menu.addAction("Toggle display value")
             a.connect(Qt.SIGNAL("triggered()"), lambda: self.plugin.toggleDisplaySignalValue(e, s))
             menu.popup(QtGui.QCursor.pos())
 
@@ -295,7 +301,7 @@ class Plugin(QtGui.QDockWidget):
     def _registerHook (self):
         self.graph.cmd.run (hookRegistration,False)
         self.graph.cmd.run ("hook = CallbackRobotAfterIncrement()", False)
-        self.graph.cmd.run ("hook.register(robot)", False)
+        self.graph.cmd.run ("hook.register()", False)
 
     def _hookSignal(self, entity, signal):
         self.graph.cmd.run ("hook.watchSignal('"+entity+"', '"+signal+"')", False)
@@ -304,7 +310,14 @@ class Plugin(QtGui.QDockWidget):
 
     def _fetchNewSignalValues(self):
         values = self.graph.cmd.run ("hook.fetch()")
-        print values
+        if len(values) == len(self.displaySignals):
+            if len(values) > 0:
+                ntimes = len(values[0])
+                if ntimes > 0:
+                    print values
+        else:
+            print "Expected a list of size", len(self.displaySignals)
+            print "Got a list of size", len(values)
 
     def refreshInterface(self):
         self.graph.createAllGraph()
