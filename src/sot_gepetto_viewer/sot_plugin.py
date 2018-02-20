@@ -20,6 +20,7 @@ class Plugin(QtGui.QDockWidget):
         toolBar = QtGui.QToolBar ("SoT buttons")
         toolBar.addAction(QtGui.QIcon.fromTheme("view-refresh"), "Create entire graph", self.graph.createAllGraph)
         toolBar.addSeparator()
+        toolBar.addAction(QtGui.QIcon.fromTheme("zoom-fit-best"), "Zoom fit best", self.plot.zoomFitBest)
         toolBar.addAction(QtGui.QIcon.fromTheme("media-playback-stop"), "Stop fetching data", self.stopAnimation)
         toolBar.addSeparator()
         toolBar.addAction(QtGui.QIcon.fromTheme("window-new"), "Create viewer", self.createRobotView)

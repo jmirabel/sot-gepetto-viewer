@@ -66,5 +66,9 @@ class Plot (QtGui.QWidget):
             self.qcp.addData(i,nnt,nny)
 
           # self.qcp.xAxis_setRange(0, self.times[-1])
-          self.qcp.rescaleAxes()
-          self.qcp.replot()
+          self.zoomFitBest()
+
+  def zoomFitBest (self):
+    self.qcp.rescaleAxes()
+    self.qcp.replot()
+
