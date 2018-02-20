@@ -4,11 +4,10 @@ from threading import Lock
 
 class CallbackRobotAfterIncrement(object):
   def __init__(self):
-    try:
-      self.hook_sig = dg.signal_base.SignalWrapper ("hook_after_increment", "bool", self.callback)
-    except:
-      print("Could not create SignalWrapper. Assuming it already exists.")
-    print (self.hook_sig)
+    sig_container = dg.create_entity("PythonSignalContainer", "python_signals")
+    if dg.entity_has_signal (sig_container, "hook_after_increment"):
+      dg.entity_execute_command (sig_container, "rmSignal", ("hook_after_increment",))
+    self.hook_sig = dg.signal_base.SignalWrapper ("hook_after_increment", "bool", self.callback)
     self.bMaxLen = 1000
     self.signals = []
     self.buffers = []
