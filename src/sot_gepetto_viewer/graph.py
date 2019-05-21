@@ -12,6 +12,8 @@ class Graph:
         self.graph.connect(Qt.SIGNAL("nodeContextMenu(QGVNode*)" ), self._nodeContextMenu)
         self.graph.connect(Qt.SIGNAL("edgeContextMenu(QGVEdge*)" ), self._signalContextMenu)
 
+        ### An object returned by re.compile
+        self.entityFilter = None
         self.typeCallbacks = {
                 "Task": ( self._nodeEntityTask, self._edgeEntityTask ),
                 "SOT" : ( self._nodeEntitySOT , self._edgeEntitySOT  )
@@ -30,7 +32,6 @@ class Graph:
         self.edgesBack = {}
         self.subgraphs = {}
         self.graph.clear()
-
 
     def initLayout (self):
         if self.layoutShouldBeFreed:
@@ -51,10 +52,16 @@ class Graph:
     def initCmd (self):
         self.cmd = CommandExecution()
 
+    def setEntityFilter (self, filter):
+        self.entityFilter = filter
+        print self.entityFilter
+
     def createAllGraph (self):
         entities = self.cmd.run ("dg.entity.Entity.entities.keys()")
         self.clear()
         for e in entities:
+            if self.entityFilter is not None and not self.entityFilter.search(e):
+                continue
             etype = self.cmd.run("dg.entity.Entity.entities['"+e+"'].className")
             self.types[e] = etype
             if self.typeCallbacks.has_key(etype):
@@ -62,6 +69,8 @@ class Graph:
             else:
                 self._nodeEntity(e)
         for e in entities:
+            if self.entityFilter is not None and not self.entityFilter.search(e):
+                continue
             etype = self.types[e]
             if self.typeCallbacks.has_key(etype):
                 self.typeCallbacks[etype][1] (e)

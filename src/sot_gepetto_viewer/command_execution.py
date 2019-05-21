@@ -33,7 +33,6 @@
 import sys
 import rospy
 
-import dynamic_graph_bridge.srv
 import dynamic_graph_bridge_msgs.srv
 
 class CommandExecution(object):

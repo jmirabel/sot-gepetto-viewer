@@ -24,6 +24,8 @@ class Plugin(QtGui.QDockWidget):
         toolBar.addAction(QtGui.QIcon.fromTheme("media-playback-stop"), "Stop fetching data", self.stopAnimation)
         toolBar.addSeparator()
         toolBar.addAction(QtGui.QIcon.fromTheme("window-new"), "Create viewer", self.createRobotView)
+        toolBar.addSeparator()
+        toolBar.addAction(QtGui.QIcon.fromTheme("view-filter"), "Set entity filter by name", self.entityFilterByName)
         main.addToolBar (toolBar)
 
         self.displaySignals = []
@@ -47,6 +49,19 @@ class Plugin(QtGui.QDockWidget):
         q = cmd.run("robot.dynamic.position.value")
         q = self._sotToPin (q)
         self.robot.display(q)
+
+    def entityFilterByName (self):
+        try:
+            ef = self.entityFilter
+        except:
+            ef = ""
+        self.entityFilter = Qt.QInputDialog.getText(self, "Entity filter", "Filter entity by name", Qt.QLineEdit.Normal, ef)
+        if len(self.entityFilter) > 0:
+            import re
+            efre = re.compile (self.entityFilter)
+            self.graph.setEntityFilter (efre)
+        else:
+            self.graph.setEntityFilter (None)
 
     def toggleDisplaySignalValue (self, entity, signal):
         print "Toggle", entity, signal
